@@ -24,9 +24,6 @@ import androidx.recyclerview.widget.RecyclerView
 import java.util.Calendar
 import kotlin.concurrent.thread
 
-data class SmsMessage(val sender: String, val body: String, val date: String, val timestamp: Long)
-data class SmsThread(val sender: String, var contactName: String, val messages: MutableList<SmsMessage>, var category: String)
-
 class MainActivity : AppCompatActivity() {
 
     private val PERMISSION_CODE = 101
@@ -42,7 +39,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // تنظیم رنگ استاتوس‌بار
         window.statusBarColor = Color.parseColor("#F5F5F3")
 
         val root = LinearLayout(this).apply {
@@ -50,7 +46,6 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#F5F5F3"))
         }
 
-        // Header Top Bar
         val headerBar = RelativeLayout(this).apply {
             setPadding(48, 48, 48, 16)
         }
@@ -90,7 +85,6 @@ class MainActivity : AppCompatActivity() {
         headerBar.addView(titleText)
         root.addView(headerBar)
 
-        // Horizontal Chips
         val chipsScrollView = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             setPadding(32, 8, 32, 24)
@@ -101,7 +95,6 @@ class MainActivity : AppCompatActivity() {
         chipsScrollView.addView(chipsLayout)
         root.addView(chipsScrollView)
 
-        // Loading Progress
         progressBar = ProgressBar(this).apply {
             visibility = View.VISIBLE
             val params = LinearLayout.LayoutParams(
@@ -115,7 +108,6 @@ class MainActivity : AppCompatActivity() {
         }
         root.addView(progressBar)
 
-        // RecyclerView
         recyclerView = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             setPadding(32, 8, 32, 32)
@@ -246,11 +238,13 @@ class MainActivity : AppCompatActivity() {
             val cursor = contentResolver.query(uri, null, null, null, "date DESC")
 
             cursor?.use {
+                val idIndex = it.getColumnIndex("_id")
                 val bodyIndex = it.getColumnIndex("body")
                 val addressIndex = it.getColumnIndex("address")
                 val dateIndex = it.getColumnIndex("date")
 
                 while (it.moveToNext()) {
+                    val id = if (idIndex != -1) it.getLong(idIndex) else -1L
                     val body = if (bodyIndex != -1 && !it.isNull(bodyIndex)) it.getString(bodyIndex) ?: "" else ""
                     val rawAddress = if (addressIndex != -1 && !it.isNull(addressIndex)) it.getString(addressIndex) ?: "ناشناس" else "ناشناس"
                     val dateMillis = if (dateIndex != -1 && !it.isNull(dateIndex)) it.getLong(dateIndex) else System.currentTimeMillis()
@@ -269,7 +263,7 @@ class MainActivity : AppCompatActivity() {
                         "${calendar.get(Calendar.YEAR)}/${calendar.get(Calendar.MONTH) + 1}/${calendar.get(Calendar.DAY_OF_MONTH)}"
                     }
 
-                    val message = SmsMessage(rawAddress, body, solarDate, dateMillis)
+                    val message = SmsMessage(id, rawAddress, body, solarDate, dateMillis)
 
                     if (!allThreadsMap.containsKey(rawAddress)) {
                         val category = classifyAccurate(body, rawAddress)
