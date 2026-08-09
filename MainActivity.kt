@@ -75,7 +75,7 @@ class MainActivity : AppCompatActivity() {
         chipsScrollView.addView(chipsLayout)
         root.addView(chipsScrollView)
 
-        // Loading
+        // Loading Progress
         progressBar = ProgressBar(this).apply {
             visibility = View.VISIBLE
             val params = LinearLayout.LayoutParams(
@@ -89,7 +89,7 @@ class MainActivity : AppCompatActivity() {
         }
         root.addView(progressBar)
 
-        // RecyclerView بهینه‌شده برای جلوگیری از کرش
+        // RecyclerView
         recyclerView = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             setPadding(32, 8, 32, 32)
@@ -101,7 +101,7 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(root)
 
-        // درخواست مجوز برنامه پیش‌فرض و مجوز اعلان‌ها
+        // بررسی و درخواست مجوزها
         requestDefaultSmsAppAndPermissions()
     }
 
@@ -128,21 +128,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkDefaultSmsRole() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val roleManager = getSystemService(RoleManager::class.java)
-            if (roleManager != null && !roleManager.isRoleHeld(RoleManager.ROLE_SMS)) {
-                val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS)
-                roleLauncher.launch(intent)
-                return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val roleManager = getSystemService(RoleManager::class.java)
+                if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_SMS)) {
+                    if (!roleManager.isRoleHeld(RoleManager.ROLE_SMS)) {
+                        val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS)
+                        roleLauncher.launch(intent)
+                        return
+                    }
+                }
+            } else {
+                val defaultSmsPackage = Telephony.Sms.getDefaultSmsPackage(this)
+                if (defaultSmsPackage != packageName) {
+                    val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
+                    intent.putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
+                    startActivity(intent)
+                    return
+                }
             }
-        } else {
-            val defaultSmsPackage = Telephony.Sms.getDefaultSmsPackage(this)
-            if (defaultSmsPackage != packageName) {
-                val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
-                intent.putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
-                startActivity(intent)
-                return
-            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
         loadAllSmsAsync()
     }
@@ -156,36 +162,44 @@ class MainActivity : AppCompatActivity() {
         progressBar.visibility = View.VISIBLE
 
         thread {
-            allThreadsMap.clear()
-            val uri = Uri.parse("content://sms/inbox")
-            val cursor = contentResolver.query(uri, null, null, null, "date DESC")
+            try {
+                allThreadsMap.clear()
+                val uri = Uri.parse("content://sms/inbox")
+                val cursor = contentResolver.query(uri, null, null, null, "date DESC")
 
-            cursor?.use {
-                val bodyIndex = it.getColumnIndex("body")
-                val addressIndex = it.getColumnIndex("address")
-                val dateIndex = it.getColumnIndex("date")
+                cursor?.use {
+                    val bodyIndex = it.getColumnIndex("body")
+                    val addressIndex = it.getColumnIndex("address")
+                    val dateIndex = it.getColumnIndex("date")
 
-                while (it.moveToNext()) {
-                    val body = if (bodyIndex != -1) it.getString(bodyIndex) ?: "" else ""
-                    val address = if (addressIndex != -1) it.getString(addressIndex) ?: "ناشناس" else "ناشناس"
-                    val dateMillis = if (dateIndex != -1) it.getLong(dateIndex) else System.currentTimeMillis()
+                    while (it.moveToNext()) {
+                        val body = if (bodyIndex != -1 && !it.isNull(bodyIndex)) it.getString(bodyIndex) ?: "" else ""
+                        val address = if (addressIndex != -1 && !it.isNull(addressIndex)) it.getString(addressIndex) ?: "ناشناس" else "ناشناس"
+                        val dateMillis = if (dateIndex != -1 && !it.isNull(dateIndex)) it.getLong(dateIndex) else System.currentTimeMillis()
 
-                    val calendar = Calendar.getInstance().apply { timeInMillis = dateMillis }
-                    val solarDate = SmsEngine.toSolarHijri(
-                        calendar.get(Calendar.YEAR),
-                        calendar.get(Calendar.MONTH) + 1,
-                        calendar.get(Calendar.DAY_OF_MONTH)
-                    )
+                        val calendar = Calendar.getInstance().apply { timeInMillis = dateMillis }
+                        val solarDate = try {
+                            SmsEngine.toSolarHijri(
+                                calendar.get(Calendar.YEAR),
+                                calendar.get(Calendar.MONTH) + 1,
+                                calendar.get(Calendar.DAY_OF_MONTH)
+                            )
+                        } catch (e: Exception) {
+                            "${calendar.get(Calendar.YEAR)}/${calendar.get(Calendar.MONTH) + 1}/${calendar.get(Calendar.DAY_OF_MONTH)}"
+                        }
 
-                    val message = SmsMessage(address, body, solarDate, dateMillis)
+                        val message = SmsMessage(address, body, solarDate, dateMillis)
 
-                    if (!allThreadsMap.containsKey(address)) {
-                        val category = classifyAccurate(body, address)
-                        allThreadsMap[address] = SmsThread(address, mutableListOf(message), category)
-                    } else {
-                        allThreadsMap[address]?.messages?.add(message)
+                        if (!allThreadsMap.containsKey(address)) {
+                            val category = classifyAccurate(body, address)
+                            allThreadsMap[address] = SmsThread(address, mutableListOf(message), category)
+                        } else {
+                            allThreadsMap[address]?.messages?.add(message)
+                        }
                     }
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
 
             runOnUiThread {
@@ -342,7 +356,6 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-// Adapter برای RecyclerView با کارایی بسیار بالا
 class SmsAdapter(
     private val items: List<SmsThread>,
     private val onItemClick: (SmsThread) -> Unit
@@ -407,7 +420,7 @@ class SmsAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val thread = items[position]
-        val lastMessage = thread.messages.first()
+        val lastMessage = thread.messages.firstOrNull() ?: return
 
         holder.senderText.text = thread.sender
         holder.dateText.text = lastMessage.date
