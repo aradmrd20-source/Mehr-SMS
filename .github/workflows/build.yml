@@ -24,6 +24,10 @@ jobs:
       with:
         gradle-version: '8.12'
 
+    - name: Create Signing Key
+      run: |
+        keytool -genkeypair -v -keystore release.keystore -alias keyalias -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=MehrSMS, OU=Dev, O=Mehr, L=City, ST=State, C=IR"
+
     - name: Restructure Project Structure
       run: |
         mkdir -p app/src/main/java/com/example/mehrsms
@@ -67,22 +71,46 @@ jobs:
             id 'com.android.application'
             id 'org.jetbrains.kotlin.android'
         }
+        
         android {
             namespace 'com.example.mehrsms'
             compileSdk 33
+
+            signingConfigs {
+                release {
+                    storeFile file("../../release.keystore")
+                    storePassword "password"
+                    keyAlias "keyalias"
+                    keyPassword "password"
+                }
+            }
+
             defaultConfig {
                 applicationId "com.example.mehrsms"
                 minSdk 21
                 targetSdk 33
-                versionCode 1
-                versionName "1.0"
+                versionCode ${{ github.run_number }}
+                versionName "1.0.${{ github.run_number }}"
+                signingConfig signingConfigs.release
             }
+
+            buildTypes {
+                debug {
+                    signingConfig signingConfigs.release
+                }
+                release {
+                    signingConfig signingConfigs.release
+                    minifyEnabled false
+                }
+            }
+
             compileOptions {
                 sourceCompatibility JavaVersion.VERSION_17
                 targetCompatibility JavaVersion.VERSION_17
             }
             kotlinOptions { jvmTarget = '17' }
         }
+
         dependencies {
             implementation 'androidx.core:core-ktx:1.10.1'
             implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -97,5 +125,5 @@ jobs:
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: MehrSMS-debug
+        name: MehrSMS-v${{ github.run_number }}
         path: app/build/outputs/apk/debug/app-debug.apk
