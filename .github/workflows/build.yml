@@ -29,7 +29,6 @@ jobs:
         mkdir -p app/src/main/java/com/example/mehrsms
         mkdir -p app/src/main
 
-        # ساخت کلید امضا مستقیماً داخل پوشه اصلی پروژه
         keytool -genkeypair -v -keystore release.keystore -alias keyalias -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=MehrSMS, OU=Dev, O=Mehr, L=City, ST=State, C=IR"
 
         [ -f MainActivity.kt ] && mv MainActivity.kt app/src/main/java/com/example/mehrsms/
@@ -37,6 +36,8 @@ jobs:
         [ -f SettingsActivity.kt ] && mv SettingsActivity.kt app/src/main/java/com/example/mehrsms/
         [ -f SmsEngine.kt ] && mv SmsEngine.kt app/src/main/java/com/example/mehrsms/
         [ -f SmsReceiver.kt ] && mv SmsReceiver.kt app/src/main/java/com/example/mehrsms/
+        [ -f MmsReceiver.kt ] && mv MmsReceiver.kt app/src/main/java/com/example/mehrsms/
+        [ -f HeadlessSmsSendService.kt ] && mv HeadlessSmsSendService.kt app/src/main/java/com/example/mehrsms/
         [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/
 
         cat << 'EOF' > gradle.properties
