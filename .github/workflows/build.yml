@@ -31,6 +31,7 @@ jobs:
 
         keytool -genkeypair -v -keystore release.keystore -alias keyalias -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=MehrSMS, OU=Dev, O=Mehr, L=City, ST=State, C=IR"
 
+        [ -f Models.kt ] && mv Models.kt app/src/main/java/com/example/mehrsms/
         [ -f MainActivity.kt ] && mv MainActivity.kt app/src/main/java/com/example/mehrsms/
         [ -f ChatActivity.kt ] && mv ChatActivity.kt app/src/main/java/com/example/mehrsms/
         [ -f SettingsActivity.kt ] && mv SettingsActivity.kt app/src/main/java/com/example/mehrsms/
