@@ -1,6 +1,5 @@
 package com.example.mehrsms
 
-import android.app.Activity
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -11,14 +10,14 @@ import android.telephony.SmsManager
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsetsController
 import android.widget.*
+import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import java.util.Calendar
 import kotlin.concurrent.thread
 
-class ChatActivity : Activity() {
+class ChatActivity : AppCompatActivity() {
 
     private var address: String = ""
     private var contactName: String = ""
@@ -30,126 +29,114 @@ class ChatActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        try {
-            address = intent.getStringExtra("ADDRESS") ?: ""
-            contactName = intent.getStringExtra("NAME") ?: address
+        address = intent.getStringExtra("ADDRESS") ?: ""
+        contactName = intent.getStringExtra("NAME") ?: address
 
-            window.statusBarColor = Color.parseColor("#F5F5F3")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                window.insetsController?.setSystemBarsAppearance(
-                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
-                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-                )
-            } else @Suppress("DEPRECATION") {
-                window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-            }
+        window.statusBarColor = Color.parseColor("#F5F5F3")
 
-            val root = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setBackgroundColor(Color.parseColor("#F5F5F3"))
-            }
-
-            // Header
-            val header = RelativeLayout(this).apply {
-                setPadding(32, 32, 32, 24)
-                setBackgroundColor(Color.WHITE)
-            }
-
-            val backBtn = TextView(this).apply {
-                text = "➔"
-                textSize = 22f
-                setOnClickListener { finish() }
-                val params = RelativeLayout.LayoutParams(
-                    RelativeLayout.LayoutParams.WRAP_CONTENT,
-                    RelativeLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    addRule(RelativeLayout.ALIGN_PARENT_RIGHT)
-                    addRule(RelativeLayout.CENTER_VERTICAL)
-                }
-                layoutParams = params
-            }
-
-            val nameTitle = TextView(this).apply {
-                text = contactName
-                textSize = 18f
-                setTypeface(null, Typeface.BOLD)
-                setTextColor(Color.parseColor("#1C1C1E"))
-                val params = RelativeLayout.LayoutParams(
-                    RelativeLayout.LayoutParams.WRAP_CONTENT,
-                    RelativeLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    addRule(RelativeLayout.CENTER_IN_PARENT)
-                }
-                layoutParams = params
-            }
-
-            header.addView(backBtn)
-            header.addView(nameTitle)
-            root.addView(header)
-
-            // RecyclerView
-            recyclerView = RecyclerView(this).apply {
-                layoutManager = LinearLayoutManager(this@ChatActivity).apply {
-                    stackFromEnd = true
-                }
-                setPadding(24, 16, 24, 16)
-                clipToPadding = false
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    0,
-                    1f
-                )
-            }
-            adapter = ChatAdapter(messagesList)
-            recyclerView.adapter = adapter
-            root.addView(recyclerView)
-
-            // Input Container
-            val inputContainer = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(24, 16, 24, 24)
-                setBackgroundColor(Color.WHITE)
-                gravity = Gravity.CENTER_VERTICAL
-            }
-
-            val sendBtn = Button(this).apply {
-                text = "ارسال"
-                setTextColor(Color.WHITE)
-                background = GradientDrawable().apply {
-                    cornerRadius = 24f
-                    setColor(Color.parseColor("#007AFF"))
-                }
-                setOnClickListener {
-                    val text = inputMessage.text.toString().trim()
-                    if (text.isNotEmpty()) {
-                        sendSms(text)
-                    }
-                }
-            }
-
-            inputMessage = EditText(this).apply {
-                hint = "پیام خود را بنویسید..."
-                textSize = 14f
-                setPadding(32, 20, 32, 20)
-                background = GradientDrawable().apply {
-                    cornerRadius = 24f
-                    setColor(Color.parseColor("#F2F2F7"))
-                }
-                gravity = Gravity.RIGHT
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    setMargins(16, 0, 0, 0)
-                }
-            }
-
-            inputContainer.addView(sendBtn)
-            inputContainer.addView(inputMessage)
-            root.addView(inputContainer)
-
-            setContentView(root)
-            loadChatHistory()
-        } catch (e: Exception) {
-            e.printStackTrace()
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#F5F5F3"))
         }
+
+        // Header
+        val header = RelativeLayout(this).apply {
+            setPadding(32, 32, 32, 24)
+            setBackgroundColor(Color.WHITE)
+        }
+
+        val backBtn = TextView(this).apply {
+            text = "➔"
+            textSize = 22f
+            setOnClickListener { finish() }
+            val params = RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.WRAP_CONTENT,
+                RelativeLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                addRule(RelativeLayout.ALIGN_PARENT_RIGHT)
+                addRule(RelativeLayout.CENTER_VERTICAL)
+            }
+            layoutParams = params
+        }
+
+        val nameTitle = TextView(this).apply {
+            text = contactName
+            textSize = 18f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.parseColor("#1C1C1E"))
+            val params = RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.WRAP_CONTENT,
+                RelativeLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                addRule(RelativeLayout.CENTER_IN_PARENT)
+            }
+            layoutParams = params
+        }
+
+        header.addView(backBtn)
+        header.addView(nameTitle)
+        root.addView(header)
+
+        // RecyclerView
+        recyclerView = RecyclerView(this).apply {
+            layoutManager = LinearLayoutManager(this@ChatActivity).apply {
+                stackFromEnd = true
+            }
+            setPadding(24, 16, 24, 16)
+            clipToPadding = false
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        }
+        adapter = ChatAdapter(messagesList)
+        recyclerView.adapter = adapter
+        root.addView(recyclerView)
+
+        // Input Container
+        val inputContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(24, 16, 24, 24)
+            setBackgroundColor(Color.WHITE)
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val sendBtn = Button(this).apply {
+            text = "ارسال"
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                cornerRadius = 24f
+                setColor(Color.parseColor("#007AFF"))
+            }
+            setOnClickListener {
+                val text = inputMessage.text.toString().trim()
+                if (text.isNotEmpty()) {
+                    sendSms(text)
+                }
+            }
+        }
+
+        inputMessage = EditText(this).apply {
+            hint = "پیام خود را بنویسید..."
+            textSize = 14f
+            setPadding(32, 20, 32, 20)
+            background = GradientDrawable().apply {
+                cornerRadius = 24f
+                setColor(Color.parseColor("#F2F2F7"))
+            }
+            gravity = Gravity.RIGHT
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                setMargins(16, 0, 0, 0)
+            }
+        }
+
+        inputContainer.addView(sendBtn)
+        inputContainer.addView(inputMessage)
+        root.addView(inputContainer)
+
+        setContentView(root)
+        loadChatHistory()
     }
 
     private fun loadChatHistory() {
