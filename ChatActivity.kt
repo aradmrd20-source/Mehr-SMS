@@ -22,8 +22,6 @@ import androidx.recyclerview.widget.RecyclerView
 import java.util.Calendar
 import kotlin.concurrent.thread
 
-data class SmsMessage(val id: Long, val sender: String, val body: String, val date: String, val timestamp: Long)
-
 class ChatActivity : AppCompatActivity() {
 
     private var address: String = ""
@@ -214,7 +212,6 @@ class ChatActivity : AppCompatActivity() {
             smsManager.sendTextMessage(address, null, text, null, null)
             inputMessage.setText("")
 
-            // ثبت پیامک ارسال‌شده در دیتابیس گوشی
             val now = System.currentTimeMillis()
             val values = ContentValues().apply {
                 put("address", address)
@@ -231,7 +228,6 @@ class ChatActivity : AppCompatActivity() {
         }
     }
 
-    // منوی کپی و حذف پیام
     private fun showOptionsDialog(message: SmsMessage) {
         val options = arrayOf("کپی متن", "حذف پیام")
         AlertDialog.Builder(this)
