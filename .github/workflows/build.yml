@@ -24,14 +24,13 @@ jobs:
       with:
         gradle-version: '8.12'
 
-    - name: Create Signing Key
-      run: |
-        keytool -genkeypair -v -keystore release.keystore -alias keyalias -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=MehrSMS, OU=Dev, O=Mehr, L=City, ST=State, C=IR"
-
     - name: Restructure Project Structure
       run: |
         mkdir -p app/src/main/java/com/example/mehrsms
         mkdir -p app/src/main
+
+        # ساخت کلید امضا مستقیماً داخل پوشه اصلی پروژه
+        keytool -genkeypair -v -keystore release.keystore -alias keyalias -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=MehrSMS, OU=Dev, O=Mehr, L=City, ST=State, C=IR"
 
         [ -f MainActivity.kt ] && mv MainActivity.kt app/src/main/java/com/example/mehrsms/
         [ -f SmsEngine.kt ] && mv SmsEngine.kt app/src/main/java/com/example/mehrsms/
@@ -78,7 +77,7 @@ jobs:
 
             signingConfigs {
                 release {
-                    storeFile file("../../release.keystore")
+                    storeFile file("../release.keystore")
                     storePassword "password"
                     keyAlias "keyalias"
                     keyPassword "password"
