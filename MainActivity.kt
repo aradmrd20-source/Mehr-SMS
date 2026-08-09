@@ -1,19 +1,28 @@
 package com.example.mehrsms
 
 import android.Manifest
+import android.app.role.RoleManager
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Telephony
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import java.util.Calendar
 import kotlin.concurrent.thread
@@ -24,11 +33,17 @@ data class SmsThread(val sender: String, val messages: MutableList<SmsMessage>, 
 class MainActivity : AppCompatActivity() {
 
     private val SMS_PERMISSION_CODE = 101
-    private lateinit var mainLayout: LinearLayout
+    private lateinit var recyclerView: RecyclerView
     private lateinit var chipsLayout: LinearLayout
     private lateinit var progressBar: ProgressBar
-    private val threadsMap = LinkedHashMap<String, SmsThread>()
+    private val threadsList = ArrayList<SmsThread>()
+    private val allThreadsMap = LinkedHashMap<String, SmsThread>()
     private var selectedCategory = "ALL"
+    private lateinit var adapter: SmsAdapter
+
+    private val roleLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        loadAllSmsAsync()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,7 +75,7 @@ class MainActivity : AppCompatActivity() {
         chipsScrollView.addView(chipsLayout)
         root.addView(chipsScrollView)
 
-        // Loading Indicator
+        // Loading
         progressBar = ProgressBar(this).apply {
             visibility = View.VISIBLE
             val params = LinearLayout.LayoutParams(
@@ -74,53 +89,74 @@ class MainActivity : AppCompatActivity() {
         }
         root.addView(progressBar)
 
-        // Scrollable List
-        val mainScrollView = ScrollView(this).apply {
-            isVerticalScrollBarEnabled = false
-        }
-        mainLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        // RecyclerView بهینه‌شده برای جلوگیری از کرش
+        recyclerView = RecyclerView(this).apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
             setPadding(32, 8, 32, 32)
+            clipToPadding = false
         }
-        mainScrollView.addView(mainLayout)
-        root.addView(mainScrollView)
+        adapter = SmsAdapter(threadsList) { thread -> showBottomSheetChat(thread) }
+        recyclerView.adapter = adapter
+        root.addView(recyclerView)
 
         setContentView(root)
 
-        if (checkPermissions()) {
-            loadAllSmsAsync()
+        // درخواست مجوز برنامه پیش‌فرض و مجوز اعلان‌ها
+        requestDefaultSmsAppAndPermissions()
+    }
+
+    private fun requestDefaultSmsAppAndPermissions() {
+        val permissionsToRequest = mutableListOf(
+            Manifest.permission.READ_SMS,
+            Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.SEND_SMS
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        val missingPermissions = permissionsToRequest.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missingPermissions.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), SMS_PERMISSION_CODE)
         } else {
-            requestPermissions()
+            checkDefaultSmsRole()
         }
     }
 
-    private fun checkPermissions(): Boolean {
-        val readSms = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
-        val receiveSms = ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS)
-        return readSms == PackageManager.PERMISSION_GRANTED && receiveSms == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun requestPermissions() {
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS, Manifest.permission.SEND_SMS),
-            SMS_PERMISSION_CODE
-        )
+    private fun checkDefaultSmsRole() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = getSystemService(RoleManager::class.java)
+            if (roleManager != null && !roleManager.isRoleHeld(RoleManager.ROLE_SMS)) {
+                val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS)
+                roleLauncher.launch(intent)
+                return
+            }
+        } else {
+            val defaultSmsPackage = Telephony.Sms.getDefaultSmsPackage(this)
+            if (defaultSmsPackage != packageName) {
+                val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
+                intent.putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
+                startActivity(intent)
+                return
+            }
+        }
+        loadAllSmsAsync()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == SMS_PERMISSION_CODE && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            loadAllSmsAsync()
-        }
+        checkDefaultSmsRole()
     }
 
-    // خواندن تمام پیامک‌ها به صورت پس‌زمینه برای جلوگیری از کرش و کندی
     private fun loadAllSmsAsync() {
         progressBar.visibility = View.VISIBLE
 
         thread {
-            threadsMap.clear()
+            allThreadsMap.clear()
             val uri = Uri.parse("content://sms/inbox")
             val cursor = contentResolver.query(uri, null, null, null, "date DESC")
 
@@ -129,7 +165,6 @@ class MainActivity : AppCompatActivity() {
                 val addressIndex = it.getColumnIndex("address")
                 val dateIndex = it.getColumnIndex("date")
 
-                // بدون هیچ محدودیت تعدادی - خواندن تمام پیامک‌ها
                 while (it.moveToNext()) {
                     val body = if (bodyIndex != -1) it.getString(bodyIndex) ?: "" else ""
                     val address = if (addressIndex != -1) it.getString(addressIndex) ?: "ناشناس" else "ناشناس"
@@ -144,20 +179,19 @@ class MainActivity : AppCompatActivity() {
 
                     val message = SmsMessage(address, body, solarDate, dateMillis)
 
-                    if (!threadsMap.containsKey(address)) {
+                    if (!allThreadsMap.containsKey(address)) {
                         val category = classifyAccurate(body, address)
-                        threadsMap[address] = SmsThread(address, mutableListOf(message), category)
+                        allThreadsMap[address] = SmsThread(address, mutableListOf(message), category)
                     } else {
-                        threadsMap[address]?.messages?.add(message)
+                        allThreadsMap[address]?.messages?.add(message)
                     }
                 }
             }
 
-            // بازگشت به Thread اصلی جهت به‌روزرسانی UI
             runOnUiThread {
                 progressBar.visibility = View.GONE
                 renderCategoryChips()
-                renderThreads()
+                filterThreads()
             }
         }
     }
@@ -173,8 +207,8 @@ class MainActivity : AppCompatActivity() {
     private fun renderCategoryChips() {
         chipsLayout.removeAllViews()
 
-        val counts = mutableMapOf("ALL" to threadsMap.size, "BANK" to 0, "OTP" to 0, "PROMO" to 0, "PERSONAL" to 0)
-        threadsMap.values.forEach { counts[it.category] = (counts[it.category] ?: 0) + 1 }
+        val counts = mutableMapOf("ALL" to allThreadsMap.size, "BANK" to 0, "OTP" to 0, "PROMO" to 0, "PERSONAL" to 0)
+        allThreadsMap.values.forEach { counts[it.category] = (counts[it.category] ?: 0) + 1 }
 
         val categories = listOf(
             "ALL" to "همه",
@@ -195,11 +229,7 @@ class MainActivity : AppCompatActivity() {
                 val isSelected = selectedCategory == key
                 val shape = GradientDrawable().apply {
                     cornerRadius = 40f
-                    if (isSelected) {
-                        setColor(Color.parseColor("#EAEAEA"))
-                    } else {
-                        setColor(Color.WHITE)
-                    }
+                    setColor(if (isSelected) Color.parseColor("#EAEAEA") else Color.WHITE)
                 }
                 background = shape
                 setTextColor(Color.parseColor("#1C1C1E"))
@@ -207,7 +237,7 @@ class MainActivity : AppCompatActivity() {
                 setOnClickListener {
                     selectedCategory = key
                     renderCategoryChips()
-                    renderThreads()
+                    filterThreads()
                 }
 
                 val params = LinearLayout.LayoutParams(
@@ -220,74 +250,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun renderThreads() {
-        mainLayout.removeAllViews()
-
-        val filteredThreads = if (selectedCategory == "ALL") {
-            threadsMap.values.toList()
+    private fun filterThreads() {
+        threadsList.clear()
+        if (selectedCategory == "ALL") {
+            threadsList.addAll(allThreadsMap.values)
         } else {
-            threadsMap.values.filter { it.category == selectedCategory }
+            threadsList.addAll(allThreadsMap.values.filter { it.category == selectedCategory })
         }
-
-        filteredThreads.forEach { thread ->
-            val lastMessage = thread.messages.first()
-
-            val card = CardView(this).apply {
-                radius = 36f
-                cardElevation = 0f
-                setCardBackgroundColor(Color.WHITE)
-                val params = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(0, 0, 0, 20) }
-                layoutParams = params
-
-                setOnClickListener { showBottomSheetChat(thread) }
-            }
-
-            val container = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(36, 32, 36, 32)
-            }
-
-            val topRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-
-            val dateText = TextView(this).apply {
-                text = lastMessage.date
-                textSize = 11f
-                setTextColor(Color.parseColor("#8E8E93"))
-            }
-
-            val senderText = TextView(this).apply {
-                text = thread.sender
-                textSize = 15f
-                setTypeface(null, Typeface.BOLD)
-                setTextColor(Color.parseColor("#1C1C1E"))
-                gravity = Gravity.RIGHT
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            }
-
-            topRow.addView(dateText)
-            topRow.addView(senderText)
-
-            val previewText = TextView(this).apply {
-                text = lastMessage.body
-                textSize = 13f
-                maxLines = 2
-                setTextColor(Color.parseColor("#636366"))
-                setPadding(0, 12, 0, 0)
-                gravity = Gravity.RIGHT
-            }
-
-            container.addView(topRow)
-            container.addView(previewText)
-            card.addView(container)
-
-            mainLayout.addView(card)
-        }
+        adapter.notifyDataSetChanged()
     }
 
     private fun showBottomSheetChat(thread: SmsThread) {
@@ -322,12 +292,8 @@ class MainActivity : AppCompatActivity() {
         }
         sheetLayout.addView(header)
 
-        val scrollView = ScrollView(this).apply {
-            isVerticalScrollBarEnabled = false
-        }
-        val messagesLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
+        val scrollView = ScrollView(this).apply { isVerticalScrollBarEnabled = false }
+        val messagesLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
         thread.messages.reversed().forEach { msg ->
             val msgCard = CardView(this).apply {
@@ -374,4 +340,81 @@ class MainActivity : AppCompatActivity() {
         bottomSheetDialog.setContentView(sheetLayout)
         bottomSheetDialog.show()
     }
+}
+
+// Adapter برای RecyclerView با کارایی بسیار بالا
+class SmsAdapter(
+    private val items: List<SmsThread>,
+    private val onItemClick: (SmsThread) -> Unit
+) : RecyclerView.Adapter<SmsAdapter.ViewHolder>() {
+
+    class ViewHolder(val card: CardView, val senderText: TextView, val dateText: TextView, val previewText: TextView) :
+        RecyclerView.ViewHolder(card)
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+        val context = parent.context
+        val card = CardView(context).apply {
+            radius = 36f
+            cardElevation = 0f
+            setCardBackgroundColor(Color.WHITE)
+            val params = ViewGroup.MarginLayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 0, 0, 20) }
+            layoutParams = params
+        }
+
+        val container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(36, 32, 36, 32)
+        }
+
+        val topRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val dateText = TextView(context).apply {
+            textSize = 11f
+            setTextColor(Color.parseColor("#8E8E93"))
+        }
+
+        val senderText = TextView(context).apply {
+            textSize = 15f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.parseColor("#1C1C1E"))
+            gravity = Gravity.RIGHT
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        topRow.addView(dateText)
+        topRow.addView(senderText)
+
+        val previewText = TextView(context).apply {
+            textSize = 13f
+            maxLines = 2
+            setTextColor(Color.parseColor("#636366"))
+            setPadding(0, 12, 0, 0)
+            gravity = Gravity.RIGHT
+        }
+
+        container.addView(topRow)
+        container.addView(previewText)
+        card.addView(container)
+
+        return ViewHolder(card, senderText, dateText, previewText)
+    }
+
+    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+        val thread = items[position]
+        val lastMessage = thread.messages.first()
+
+        holder.senderText.text = thread.sender
+        holder.dateText.text = lastMessage.date
+        holder.previewText.text = lastMessage.body
+
+        holder.card.setOnClickListener { onItemClick(thread) }
+    }
+
+    override fun getItemCount(): Int = items.size
 }
