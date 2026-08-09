@@ -1,7 +1,6 @@
 package com.example.mehrsms
 
 import android.Manifest
-import android.app.Activity
 import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -16,9 +15,8 @@ import android.provider.Telephony
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsetsController
 import android.widget.*
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -29,7 +27,7 @@ import kotlin.concurrent.thread
 data class SmsMessage(val sender: String, val body: String, val date: String, val timestamp: Long)
 data class SmsThread(val sender: String, var contactName: String, val messages: MutableList<SmsMessage>, var category: String)
 
-class MainActivity : Activity() {
+class MainActivity : AppCompatActivity() {
 
     private val PERMISSION_CODE = 101
     private lateinit var recyclerView: RecyclerView
@@ -44,109 +42,97 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        try {
-            // تنظیم رنگ استاتوس‌بار
-            window.statusBarColor = Color.parseColor("#F5F5F3")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                window.insetsController?.setSystemBarsAppearance(
-                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
-                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-                )
-            } else @Suppress("DEPRECATION") {
-                window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-            }
+        // تنظیم رنگ استاتوس‌بار
+        window.statusBarColor = Color.parseColor("#F5F5F3")
 
-            val root = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setBackgroundColor(Color.parseColor("#F5F5F3"))
-            }
-
-            // Header
-            val headerBar = RelativeLayout(this).apply {
-                setPadding(48, 48, 48, 16)
-            }
-
-            val settingsBtn = TextView(this).apply {
-                text = "⚙️"
-                textSize = 22f
-                setOnClickListener {
-                    startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
-                }
-                val params = RelativeLayout.LayoutParams(
-                    RelativeLayout.LayoutParams.WRAP_CONTENT,
-                    RelativeLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    addRule(RelativeLayout.ALIGN_PARENT_LEFT)
-                    addRule(RelativeLayout.CENTER_VERTICAL)
-                }
-                layoutParams = params
-            }
-
-            val titleText = TextView(this).apply {
-                text = "MehrSMS"
-                textSize = 24f
-                setTypeface(null, Typeface.BOLD)
-                setTextColor(Color.parseColor("#1C1C1E"))
-                val params = RelativeLayout.LayoutParams(
-                    RelativeLayout.LayoutParams.WRAP_CONTENT,
-                    RelativeLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    addRule(RelativeLayout.ALIGN_PARENT_RIGHT)
-                    addRule(RelativeLayout.CENTER_VERTICAL)
-                }
-                layoutParams = params
-            }
-
-            headerBar.addView(settingsBtn)
-            headerBar.addView(titleText)
-            root.addView(headerBar)
-
-            // Horizontal Chips
-            val chipsScrollView = HorizontalScrollView(this).apply {
-                isHorizontalScrollBarEnabled = false
-                setPadding(32, 8, 32, 24)
-            }
-            chipsLayout = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-            }
-            chipsScrollView.addView(chipsLayout)
-            root.addView(chipsScrollView)
-
-            // Loading Progress
-            progressBar = ProgressBar(this).apply {
-                visibility = View.VISIBLE
-                val params = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    gravity = Gravity.CENTER_HORIZONTAL
-                    setMargins(0, 40, 0, 40)
-                }
-                layoutParams = params
-            }
-            root.addView(progressBar)
-
-            // RecyclerView
-            recyclerView = RecyclerView(this).apply {
-                layoutManager = LinearLayoutManager(this@MainActivity)
-                setPadding(32, 8, 32, 32)
-                clipToPadding = false
-            }
-            adapter = SmsAdapter(threadsList) { thread ->
-                val intent = Intent(this, ChatActivity::class.java).apply {
-                    putExtra("ADDRESS", thread.sender)
-                    putExtra("NAME", thread.contactName)
-                }
-                startActivity(intent)
-            }
-            recyclerView.adapter = adapter
-            root.addView(recyclerView)
-
-            setContentView(root)
-            checkPermissions()
-        } catch (e: Exception) {
-            e.printStackTrace()
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#F5F5F3"))
         }
+
+        // Header Top Bar
+        val headerBar = RelativeLayout(this).apply {
+            setPadding(48, 48, 48, 16)
+        }
+
+        val settingsBtn = TextView(this).apply {
+            text = "⚙️"
+            textSize = 22f
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+            }
+            val params = RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.WRAP_CONTENT,
+                RelativeLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                addRule(RelativeLayout.ALIGN_PARENT_LEFT)
+                addRule(RelativeLayout.CENTER_VERTICAL)
+            }
+            layoutParams = params
+        }
+
+        val titleText = TextView(this).apply {
+            text = "MehrSMS"
+            textSize = 24f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.parseColor("#1C1C1E"))
+            val params = RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.WRAP_CONTENT,
+                RelativeLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                addRule(RelativeLayout.ALIGN_PARENT_RIGHT)
+                addRule(RelativeLayout.CENTER_VERTICAL)
+            }
+            layoutParams = params
+        }
+
+        headerBar.addView(settingsBtn)
+        headerBar.addView(titleText)
+        root.addView(headerBar)
+
+        // Horizontal Chips
+        val chipsScrollView = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            setPadding(32, 8, 32, 24)
+        }
+        chipsLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        chipsScrollView.addView(chipsLayout)
+        root.addView(chipsScrollView)
+
+        // Loading Progress
+        progressBar = ProgressBar(this).apply {
+            visibility = View.VISIBLE
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                setMargins(0, 40, 0, 40)
+            }
+            layoutParams = params
+        }
+        root.addView(progressBar)
+
+        // RecyclerView
+        recyclerView = RecyclerView(this).apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            setPadding(32, 8, 32, 32)
+            clipToPadding = false
+        }
+        adapter = SmsAdapter(threadsList) { thread ->
+            val intent = Intent(this, ChatActivity::class.java).apply {
+                putExtra("ADDRESS", thread.sender)
+                putExtra("NAME", thread.contactName)
+            }
+            startActivity(intent)
+        }
+        recyclerView.adapter = adapter
+        root.addView(recyclerView)
+
+        setContentView(root)
+        checkPermissions()
     }
 
     private fun checkPermissions() {
