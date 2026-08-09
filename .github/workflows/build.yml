@@ -28,10 +28,11 @@ jobs:
       run: |
         mkdir -p app/src/main/java/com/example/mehrsms
         mkdir -p app/src/main
+
         [ -f MainActivity.kt ] && mv MainActivity.kt app/src/main/java/com/example/mehrsms/
+        [ -f SmsEngine.kt ] && mv SmsEngine.kt app/src/main/java/com/example/mehrsms/
         [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/
 
-        # ساخت فایل gradle.properties برای فعال‌سازی AndroidX
         cat << 'EOF' > gradle.properties
         android.useAndroidX=true
         android.enableJetifier=true
