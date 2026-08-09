@@ -1,5 +1,9 @@
 package com.example.mehrsms
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.ContentValues
+import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -11,11 +15,14 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import java.util.Calendar
 import kotlin.concurrent.thread
+
+data class SmsMessage(val id: Long, val sender: String, val body: String, val date: String, val timestamp: Long)
 
 class ChatActivity : AppCompatActivity() {
 
@@ -90,7 +97,10 @@ class ChatActivity : AppCompatActivity() {
                 1f
             )
         }
-        adapter = ChatAdapter(messagesList)
+        adapter = ChatAdapter(
+            messagesList,
+            onLongClick = { msg -> showOptionsDialog(msg) }
+        )
         recyclerView.adapter = adapter
         root.addView(recyclerView)
 
@@ -153,11 +163,13 @@ class ChatActivity : AppCompatActivity() {
                 )
 
                 cursor?.use {
+                    val idIndex = it.getColumnIndex("_id")
                     val bodyIndex = it.getColumnIndex("body")
                     val dateIndex = it.getColumnIndex("date")
                     val typeIndex = it.getColumnIndex("type")
 
                     while (it.moveToNext()) {
+                        val id = if (idIndex != -1) it.getLong(idIndex) else -1L
                         val body = if (bodyIndex != -1 && !it.isNull(bodyIndex)) it.getString(bodyIndex) ?: "" else ""
                         val dateMillis = if (dateIndex != -1 && !it.isNull(dateIndex)) it.getLong(dateIndex) else System.currentTimeMillis()
                         val type = if (typeIndex != -1) it.getInt(typeIndex) else 1
@@ -174,7 +186,7 @@ class ChatActivity : AppCompatActivity() {
                         }
 
                         val sender = if (type == 2) "ME" else address
-                        messagesList.add(SmsMessage(sender, body, solarDate, dateMillis))
+                        messagesList.add(SmsMessage(id, sender, body, solarDate, dateMillis))
                     }
                 }
             } catch (e: Exception) {
@@ -202,26 +214,65 @@ class ChatActivity : AppCompatActivity() {
             smsManager.sendTextMessage(address, null, text, null, null)
             inputMessage.setText("")
 
+            // ثبت پیامک ارسال‌شده در دیتابیس گوشی
             val now = System.currentTimeMillis()
-            val calendar = Calendar.getInstance().apply { timeInMillis = now }
-            val solarDate = SmsEngine.toSolarHijri(
-                calendar.get(Calendar.YEAR),
-                calendar.get(Calendar.MONTH) + 1,
-                calendar.get(Calendar.DAY_OF_MONTH)
-            )
+            val values = ContentValues().apply {
+                put("address", address)
+                put("body", text)
+                put("date", now)
+                put("type", 2)
+            }
+            contentResolver.insert(Uri.parse("content://sms/sent"), values)
 
-            messagesList.add(SmsMessage("ME", text, solarDate, now))
-            adapter.notifyDataSetChanged()
-            recyclerView.scrollToPosition(messagesList.size - 1)
-
+            loadChatHistory()
             Toast.makeText(this, "پیام ارسال شد", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(this, "خطا در ارسال پیام: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
+
+    // منوی کپی و حذف پیام
+    private fun showOptionsDialog(message: SmsMessage) {
+        val options = arrayOf("کپی متن", "حذف پیام")
+        AlertDialog.Builder(this)
+            .setTitle("عملیات")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> copyToClipboard(message.body)
+                    1 -> deleteSms(message)
+                }
+            }
+            .show()
+    }
+
+    private fun copyToClipboard(text: String) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("SMS", text)
+        clipboard.setPrimaryClip(clip)
+        Toast.makeText(this, "متن کپی شد", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun deleteSms(message: SmsMessage) {
+        try {
+            val uri = Uri.parse("content://sms/${message.id}")
+            val rowsDeleted = contentResolver.delete(uri, null, null)
+            if (rowsDeleted > 0) {
+                messagesList.remove(message)
+                adapter.notifyDataSetChanged()
+                Toast.makeText(this, "پیام حذف شد", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "برای حذف پیام باید برنامه پیش‌فرض SMS باشید", Toast.LENGTH_LONG).show()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "خطا در حذف: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
 }
 
-class ChatAdapter(private val items: List<SmsMessage>) : RecyclerView.Adapter<ChatAdapter.ViewHolder>() {
+class ChatAdapter(
+    private val items: List<SmsMessage>,
+    private val onLongClick: (SmsMessage) -> Unit
+) : RecyclerView.Adapter<ChatAdapter.ViewHolder>() {
 
     class ViewHolder(val container: LinearLayout, val card: FrameLayout, val bodyText: TextView, val dateText: TextView) :
         RecyclerView.ViewHolder(container)
@@ -279,6 +330,11 @@ class ChatAdapter(private val items: List<SmsMessage>) : RecyclerView.Adapter<Ch
             bg.setColor(Color.WHITE)
         }
         holder.card.background = bg
+
+        holder.card.setOnLongClickListener {
+            onLongClick(msg)
+            true
+        }
     }
 
     override fun getItemCount(): Int = items.size
